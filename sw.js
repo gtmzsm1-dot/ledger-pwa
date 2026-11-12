@@ -1,5 +1,5 @@
 // Service Worker：缓存全部页面文件，断网可用；不向任何外部地址发请求
-const VERSION = 'v1.0.0-1';
+const VERSION = 'v1.0.0-2';
 const CACHE = 'ledger-' + VERSION;
 const FILES = [
   './', './index.html', './styles.css', './manifest.webmanifest',

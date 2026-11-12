@@ -25,6 +25,7 @@ const tagName = (id) => (id ? S.ledger.state.tags[id]?.name ?? '' : '');
 // ---------- 启动 ----------
 async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  try { S.lastExport = await db.kvGet('lastExport'); } catch { S.lastExport = null; }
   try { S.persisted = navigator.storage?.persisted ? await navigator.storage.persisted() : null;
     if (S.persisted === false && navigator.storage?.persist) S.persisted = await navigator.storage.persist(); } catch { S.persisted = null; }
   let deviceId = await db.kvGet('deviceId');
@@ -125,6 +126,13 @@ function renderLock() {
   } });
 }
 
+// 有流水且从未导出或距上次导出超过 7 天时提醒
+function backupDue(L) {
+  if (!L.activeEntries().length) return false;
+  if (!S.lastExport) return true;
+  return Date.now() - Date.parse(S.lastExport) > 7 * 864e5;
+}
+
 const VIEWS = {};
 const AFTER = {};
 
@@ -139,6 +147,7 @@ VIEWS.home = () => {
   const warn = [
     S.integrity.length ? `<div class="banner"><b>数据自检发现问题</b>${esc(S.integrity[0])}。请到「备份与恢复」用最近的备份恢复。</div>` : '',
     S.persisted === false ? `<div class="banner"><b>存储未获永久保留</b>系统空间紧张时可能清理，请定期「导出完整备份」。</div>` : '',
+    backupDue(L) ? `<div class="banner" id="backup-due"><b>${S.lastExport ? `已 ${Math.floor((Date.now() - Date.parse(S.lastExport)) / 864e5)} 天没导出完整备份` : '还没导出过完整备份'}</b>数据只在这台手机上，请到「菜单 → 备份与恢复」导出到“文件”App。</div>` : '',
   ].join('');
   return `${top('记账', { back: '', right: '<button class="iconbtn" data-act="go" data-to="menu" aria-label="菜单">☰</button>' })}
   ${banner}${warn}
@@ -503,7 +512,8 @@ async function exportFullBackup() {
   const all = zipStore([...files, { name: '账目-全部.xlsx', data: xlsx }]);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   await saveFile(all, `记账完整备份-${stamp}.zip`, 'application/zip');
-  await db.kvSet('lastExport', new Date().toISOString());
+  S.lastExport = new Date().toISOString();
+  await db.kvSet('lastExport', S.lastExport);
 }
 
 async function restoreFrom(state, ops, photos, label) {
